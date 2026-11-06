@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GRANDIS TECHNOLOGY - QC Result Portal</title>
+  <link rel="stylesheet" href="home.css">
+</head>
+<body>
+
+  <!-- =========================================================================
+       VIEW 1: STUDENT QC PORTAL LOGIN (OLD MODEL FULL SCREEN SPLIT LAYOUT)
+       ========================================================================= -->
+  <div class="portal-wrapper" id="portalLoginView">
+    
+    <!-- Left Black Branding Panel (Edge to Edge) -->
+    <div class="portal-left">
+      <div class="portal-left-logo">
+        <img src="grandis-logo-cropped.png" alt="Grandis Technology Pvt. Ltd." class="portal-left-brand-img">
+      </div>
+
+      <div class="portal-left-content">
+        <h1>QC Result<br>Portal</h1>
+        <p>Official Quality Checking Examination and Evaluation Results published by the R&amp;D Department.</p>
+        
+        <!-- Strip of 4 colour tiles: #8fc98a, #4dbfb3, #29abe2, #2a8fe0 -->
+        <div class="color-tiles-strip">
+          <div class="color-tile t1" title="#8fc98a"></div>
+          <div class="color-tile t2" title="#4dbfb3"></div>
+          <div class="color-tile t3" title="#29abe2"></div>
+          <div class="color-tile t4" title="#2a8fe0"></div>
+        </div>
+      </div>
+
+      <div class="portal-left-footer">
+        <span>&copy; 2026 GRANDIS TECHNOLOGY Pvt. Ltd.</span>
+      </div>
+    </div>
+
+    <!-- Right White Form Panel (Edge to Edge with Centered Login Form) -->
+    <div class="portal-right">
+      <div class="portal-right-content">
+        <div class="portal-header">
+          <h2>Student Login</h2>
+          <p>Select your branch, evaluation term and enter your GID credentials to access your verified mark sheet.</p>
+        </div>
+
+        <!-- Quick Demo Credentials Box -->
+        <div class="demo-credentials-box">
+          <b>Demo Access Credentials:</b><br>
+          • Pass Sample: GID <span class="pill">DEMO1002</span> | Password <span class="pill">DEMO1002</span> (Result: PASS, Grade A)<br>
+          • Fail Sample: GID <span class="pill">DEMO1001</span> | Password <span class="pill">DEMO1001</span> (Result: FAIL, Grade B)<br>
+          • Partial Sample: GID <span class="pill">DEMO1006</span> | Password <span class="pill">DEMO1006</span> (Result: PENDING)
+        </div>
+
+        <form id="loginForm" autocomplete="off">
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="branchSelect">Branch</label>
+              <select id="branchSelect" name="branch" required></select>
+            </div>
+            <div class="form-group">
+              <label for="qcSelect">QC Assessment Type</label>
+              <select id="qcSelect" name="qc" required></select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="batchSelect">Batch</label>
+            <select id="batchSelect" name="batch">
+              <option value="(All Batches)">(All Batches)</option>
+            </select>
+          </div>
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="gidInput">GID Number</label>
+              <input type="text" id="gidInput" name="gid" placeholder="e.g. DEMO1001" required autocomplete="off" autocorrect="off" autocapitalize="characters">
+            </div>
+            <div class="form-group">
+              <label for="passwordInput">Password (= GID)</label>
+              <input type="password" id="passwordInput" name="password" placeholder="Enter your GID number" required autocomplete="off">
+            </div>
+          </div>
+
+          <button type="submit" id="submitBtn" class="btn-view-result">
+            <span>View Result</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+          </button>
+
+          <div class="admin-portal-link-wrap">
+            <button type="button" id="openAdminModalBtn" class="btn-admin-portal-link" title="Authorized Staff &amp; QC Heads only">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+              <span>Admin Portal (Staff Login)</span>
+            </button>
+          </div>
+
+          <div id="errMsg" class="form-err-msg"></div>
+        </form>
+
+        <div class="portal-right-footer">
+          <div>Results published by R&amp;D Department</div>
+          <div class="rd-logo-wrap">
+            <img src="rd-logo.png" alt="R&amp;D Department Logo" class="portal-rd-brand-img">
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- =========================================================================
+       VIEW 2: FULL-PAGE A4 PORTRAIT OFFICIAL MARK SHEET OVERLAY
+       ========================================================================= -->
+  <div class="report-overlay" id="reportOverlay" hidden>
+    
+    <!-- Top Floating Toolbar -->
+    <div class="report-topbar">
+      <div class="report-topbar-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+        <span>Verified QC Evaluation Mark Sheet</span>
+      </div>
+      <div class="report-actions">
+        <button type="button" class="btn-report-back" id="closeReportBtn">← Back</button>
+        <button type="button" class="btn-report-print" onclick="window.print()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 6 2 18 2 18 9"></polyline>
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+            <rect x="6" y="14" width="12" height="8"></rect>
+          </svg>
+          <span>Print / PDF</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Official Report Document Content (Injected dynamically) -->
+    <div id="reportBodyContainer"></div>
+
+  </div>
+
+  <!-- =========================================================================
+       ADMIN PORTAL LOGIN MODAL (AUTHENTICATION LOCK)
+       ========================================================================= -->
+  <div id="adminLoginModal" class="admin-modal-overlay">
+    <div class="admin-modal-dialog">
+      <div class="admin-modal-header">
+        <div class="admin-modal-title-wrap">
+          <div class="admin-modal-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#217346" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+          </div>
+          <div>
+            <h3> Authentication</h3>
+            <p>Authorized Staff &amp; QC Heads only</p>
+          </div>
+        </div>
+        <button type="button" id="closeAdminModalBtn" class="admin-modal-close" title="Close">&times;</button>
+      </div>
+
+      <form id="adminLoginForm" class="admin-modal-form" autocomplete="off">
+        <div id="adminErrMsg" class="admin-err-msg"></div>
+
+        <div class="form-group">
+          <label for="adminUsername">Username</label>
+          <div class="input-with-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            <input type="text" id="adminUsername" name="adminUsername" placeholder="Enter Username" required autocomplete="off" autocapitalize="none">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="adminPassword">Password</label>
+          <div class="input-with-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            <input type="password" id="adminPassword" name="adminPassword" placeholder="Enter Password" required autocomplete="current-password">
+          </div>
+        </div>
+
+        <!-- Show password option -->
+        <div class="admin-show-pwd-row">
+          <label class="show-pwd-checkbox-label">
+            <input type="checkbox" id="toggleShowAdminPwd">
+            <span>Show password</span>
+          </label>
+        </div>
+
+        <button type="submit" id="adminLoginSubmitBtn" class="btn-admin-login-submit">
+          <span>Login to Admin Portal</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script>
+    // Initialize Portal Selects
+    fillSelect('branchSelect', BRANCHES);
+    fillSelect('qcSelect', QCS);
+
+    async function loadDynamicBranches() {
+      try {
+        const res = await api('branches');
+        if (res && res.branches && res.branches.length > 0) {
+          fillSelect('branchSelect', res.branches);
+          refreshBatchOptions();
+        }
+      } catch (e) {}
+    }
+    loadDynamicBranches();
+
+    function fillSelect(id, items) {
+      const el = document.getElementById(id);
+      el.innerHTML = items.map(it => `<option value="${esc(it)}">${esc(it)}</option>`).join('');
+    }
+
+    // Refresh batch dropdown whenever branch or QC selection changes
+    async function refreshBatchOptions() {
+      const branch = document.getElementById('branchSelect').value;
+      const qc = document.getElementById('qcSelect').value;
+      const batchSel = document.getElementById('batchSelect');
+      const errEl = document.getElementById('errMsg');
+      
+      // Show loading indicator in dropdown
+      batchSel.disabled = true;
+      batchSel.innerHTML = '<option value="">Loading batches...</option>';
+
+      try {
+        const res = await api('batches', { branch, qc });
+        let batches = [];
+        if (res && res.batches && Array.isArray(res.batches)) {
+          batches = res.batches;
+        }
+
+        const opts = ['<option value="(All Batches)">(All Batches)</option>'];
+        if (batches.length > 0) {
+          batches.forEach(b => {
+            opts.push(`<option value="${esc(b)}">${esc(b)}</option>`);
+          });
+        }
+        batchSel.innerHTML = opts.join('');
+      } catch (e) {
+        console.error("Batch query error:", e);
+        batchSel.innerHTML = '<option value="(All Batches)">(All Batches)</option>';
+        if (errEl && !errEl.textContent) {
+          errEl.textContent = e.message;
+        }
+      } finally {
+        batchSel.disabled = false;
+      }
+    }
+
+    document.getElementById('branchSelect').addEventListener('change', () => {
+      document.getElementById('errMsg').textContent = '';
+      refreshBatchOptions();
+    });
+    document.getElementById('qcSelect').addEventListener('change', () => {
+      document.getElementById('errMsg').textContent = '';
+      refreshBatchOptions();
+    });
+    refreshBatchOptions();
+
+    // Close Report Overlay handler
+    document.getElementById('closeReportBtn').addEventListener('click', () => {
+      document.getElementById('reportOverlay').hidden = true;
+    });
+
+    // Form Submission: Real-time query to Google Sheets
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errEl = document.getElementById('errMsg');
+      const submitBtn = document.getElementById('submitBtn');
+      errEl.textContent = '';
+
+      const branch = document.getElementById('branchSelect').value;
+      const qc = document.getElementById('qcSelect').value;
+      const batch = document.getElementById('batchSelect').value;
+      const gid = document.getElementById('gidInput').value.trim();
+      const password = document.getElementById('passwordInput').value.trim();
+
+      if (!gid) {
+        errEl.textContent = 'Please enter your GID number.';
+        return;
+      }
+
+      if (gid.toUpperCase() !== password.toUpperCase()) {
+        errEl.textContent = 'Invalid credentials. Password must match your GID number.';
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = `<span>Verifying credentials...</span>`;
+
+      try {
+        const res = await api('login', { branch, qc, batch, gid, password });
+        if (!res || !res.ok || res.error || !res.results || res.results.length === 0) {
+          errEl.textContent = (res && res.error) ? res.error : `No verified result found for GID ${gid} in ${qc} (${branch}).`;
+        } else {
+          renderStudentMarkSheets(res.q, res.results);
+        }
+      } catch (err) {
+        console.error("Student result query error:", err);
+        errEl.textContent = err.message || 'Cannot connect to result server. Check the Sheet URL / deployment.';
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `<span>View Result</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>`;
+      }
+    });
+
+    /**
+     * Render Official QC Mark Sheet
+     * Matches exact certificate design with double gold frame, ivory tables, and official layout
+     */
+    function renderStudentMarkSheets(qcDef, results) {
+      const container = document.getElementById('reportBodyContainer');
+      
+      const html = results.map(item => {
+        const info = item.info || {};
+        const student = item.row || {};
+        const marks = student.m || student.marks || {};
+        
+        // Calculate all values according to configurable rules
+        const evalResult = evaluateQC(qcDef, marks);
+
+        // Derive Main & Sub Report Titles (e.g. "FIRST QC REPORT")
+        const mainReportTitle = (qcDef.name && qcDef.name.toUpperCase().endsWith('REPORT')
+          ? qcDef.name
+          : `${qcDef.name || 'QC'} REPORT`).toUpperCase();
+        const subReportTitle = qcDef.title || '';
+
+        // Generate Section rows with A., B., C. prefixes and per-section Sl. No starting at 1
+        let sectionsHtml = '';
+
+        qcDef.sections.forEach((sec, sIdx) => {
+          const secSummary = evalResult.sections.find(s => s.name === sec.name) || {};
+          const isSectionTotalApplicable = sec.passMark !== null && sec.passMark !== undefined;
+          const secLetter = String.fromCharCode(65 + sIdx);
+          const secTitle = `${secLetter}. ${sec.name.toUpperCase()}`;
+
+          // Section Header Row (e.g. A. THEORY, B. PRACTICAL)
+          sectionsHtml += `
+            <tr class="section-row">
+              <td colspan="6">${esc(secTitle)}</td>
+            </tr>
+          `;
+
+          // Part Rows with independent numbering per section (1, 2, 3...)
+          let partSlNo = 1;
+          sec.parts.forEach(part => {
+            const rawVal = marks[part.name];
+            const hasVal = rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== '';
+            const valText = hasVal ? esc(rawVal) : '-';
+
+            sectionsHtml += `
+              <tr>
+                <td class="col-sl">${partSlNo++}</td>
+                <td class="col-subj">${esc(part.name)}</td>
+                <td class="col-max">${part.max}</td>
+                <td class="col-min">-</td>
+                <td class="col-obt">${valText}</td>
+                <td class="col-rem"></td>
+              </tr>
+            `;
+          });
+
+          // Section Total Row
+          if (isSectionTotalApplicable || qcDef.sections.length > 1) {
+            const statusClass = secSummary.status === 'PASS' ? 'status-badge-pass' : (secSummary.status === 'FAIL' ? 'status-badge-fail' : 'status-badge-pending');
+            const passRequirementText = sec.passMark !== null ? sec.passMark : '-';
+            const statusText = secSummary.status || '-';
+
+            sectionsHtml += `
+              <tr class="total-row">
+                <td></td>
+                <td class="col-subj">${esc(sec.name)} Total</td>
+                <td class="col-max">${secSummary.max}</td>
+                <td class="col-min">${passRequirementText}</td>
+                <td class="col-obt">${secSummary.entered > 0 ? secSummary.total : '-'}</td>
+                <td class="col-rem"><span class="${statusClass}">${esc(statusText)}</span></td>
+              </tr>
+            `;
+          }
+        });
+
+        // Grand Total Row
+        const grandStatusClass = evalResult.overallResult === 'PASS' ? 'status-badge-pass' : (evalResult.overallResult === 'FAIL' ? 'status-badge-fail' : 'status-badge-pending');
+        const passRuleDesc = qcDef.overall.rule === 'SECTIONS_PASS' ? 'Theory & Practical' : `Min ${qcDef.overall.passMark}`;
+
+        const grandTotalRow = `
+          <tr class="grand-row">
+            <td></td>
+            <td class="col-subj">OVERALL TOTAL</td>
+            <td class="col-max">${evalResult.overallMax}</td>
+            <td class="col-min">${esc(passRuleDesc)}</td>
+            <td class="col-obt">${evalResult.grandTotal !== '' ? evalResult.grandTotal : '-'}</td>
+            <td class="col-rem"><span class="${grandStatusClass}">${esc(evalResult.overallResult || '-')}</span></td>
+          </tr>
+        `;
+
+        // Status badge in summary strip
+        const summaryResultBadge = evalResult.overallResult 
+          ? `<span class="${grandStatusClass}">${esc(evalResult.overallResult)}</span>`
+          : `-`;
+
+        // Grade / Level label in summary strip (shown even for FAIL students when all parts completed)
+        const summaryGradeVal = evalResult.overallLabel || (evalResult.isPending ? 'PENDING' : '-');
+
+        // Words for total marks
+        const totalWords = evalResult.grandTotal !== '' ? numberToWords(parseFloat(evalResult.grandTotal)) : 'Marks Pending';
+
+        // Comments
+        const commentText = student.remarks || (evalResult.overallResult === 'PASS' 
+          ? 'Candidate has successfully demonstrated required proficiency standards.' 
+          : (evalResult.overallResult === 'FAIL' ? 'Candidate did not achieve minimum passing criteria in one or more assessment modules.' : 'Evaluation in progress.'));
+
+        const assessorNames = info.assessors || info.assessor || 'R&D Quality Checking Board';
+
+        return `
+          <div class="official-report-sheet">
+            <!-- Header Row: Grandis Logo (Left), Institute Titles (Center), R&D Logo (Right) -->
+            <div class="official-report-header">
+              <div class="report-logo-left">
+                <img src="grandis-logo-transparent.png" alt="Grandis Technology Logo" class="cert-grandis-logo">
+              </div>
+
+              <div class="header-center">
+                <div class="company-title">GRANDIS TECHNOLOGY PVT. LTD.</div>
+                <div class="department-title">R &amp; D &nbsp; D E P A R T M E N T</div>
+              </div>
+
+              <div class="report-logo-right">
+                <img src="rd-logo.png" alt="R&amp;D Logo" class="cert-rd-logo">
+              </div>
+            </div>
+
+            <!-- Title & Subtitle Block Below Header Row -->
+            <div class="report-title-block">
+              <div class="report-main-title">${esc(mainReportTitle)}</div>
+              <div class="report-sub-title">${esc(subReportTitle)}</div>
+              
+              <div class="flourish-divider">
+                <div class="flourish-line"></div>
+                <div class="flourish-diamond">&#9670;</div>
+                <div class="flourish-line"></div>
+              </div>
+            </div>
+
+            <!-- Student & Batch Information Table (Exact 5 rows from official template) -->
+            <table class="qc-info-table">
+              <tr>
+                <th>STUDENT NAME</th>
+                <td>${esc(student.name || '-')}</td>
+                <th>GID NUMBER</th>
+                <td>${esc(student.gid || '-')}</td>
+              </tr>
+              <tr>
+                <th>BRANCH</th>
+                <td>${esc(info.branch || '-')}</td>
+                <th>BATCH</th>
+                <td>${esc(info.batch || '-')}</td>
+              </tr>
+              <tr>
+                <th>FACULTY</th>
+                <td>${esc(info.faculty || '-')}</td>
+                <th>MODULE INCHARGE</th>
+                <td>${esc(info.incharge || info.moduleIncharge || '-')}</td>
+              </tr>
+              <tr>
+                <th>HOF</th>
+                <td>${esc(info.hof || '-')}</td>
+                <th>STRENGTH</th>
+                <td>${esc(info.strength || '-')}</td>
+              </tr>
+              <tr>
+                <th>QC DATE</th>
+                <td colspan="3">${esc(info.qcDate || info.date || '-')}</td>
+              </tr>
+            </table>
+
+            <!-- Marks Table (Exact Columns, Numbered Subjects, and PASS/FAIL Badges) -->
+            <table class="qc-marks-table">
+              <thead>
+                <tr>
+                  <th class="col-sl">SL. NO</th>
+                  <th class="col-subj">SUBJECT</th>
+                  <th class="col-max">MAX MARKS</th>
+                  <th class="col-min">MIN MARKS</th>
+                  <th class="col-obt">MARKS OBTAINED</th>
+                  <th class="col-rem">REMARKS</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${sectionsHtml}
+                ${grandTotalRow}
+              </tbody>
+            </table>
+
+            <!-- Summary Strip -->
+            <div class="qc-summary-strip">
+              <div class="qc-summary-item">
+                <div class="qc-summary-label">Overall Result</div>
+                <div class="qc-summary-val">${summaryResultBadge}</div>
+              </div>
+              <div class="qc-summary-item">
+                <div class="qc-summary-label">Percentage</div>
+                <div class="qc-summary-val">${evalResult.percentage ? evalResult.percentage + '%' : '-'}</div>
+              </div>
+              <div class="qc-summary-item">
+                <div class="qc-summary-label">${esc(evalResult.labelType)}</div>
+                <div class="qc-summary-val">${esc(summaryGradeVal)}</div>
+              </div>
+            </div>
+
+            <!-- Grand Total In Words -->
+            <div class="words-row">
+              <b>Grand Total in Words:</b>
+              <span class="words-val">${esc(totalWords)}</span>
+            </div>
+
+            <!-- QC Comments Box -->
+            <div class="qc-comments-box">
+              <div class="comments-label">QC Inspector Comments &amp; Recommendations:</div>
+              <div>${esc(commentText)}</div>
+            </div>
+
+            <!-- Signature Lines -->
+            <div class="qc-signatures">
+              <div class="qc-sig-block">
+                <span>${esc(assessorNames)}</span>
+                <span class="qc-sig-sub">QC Assessor(s) Signature</span>
+              </div>
+              <div class="qc-sig-block">
+                <span>Head of R&amp;D Department</span>
+                <span class="qc-sig-sub">GRANDIS TECHNOLOGY Pvt. Ltd.</span>
+              </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="qc-report-footer">
+              This document is an electronically verified quality checking evaluation record generated by the R&amp;D Department, GRANDIS TECHNOLOGY Pvt. Ltd.
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      container.innerHTML = html;
+      document.getElementById('reportOverlay').hidden = false;
+      document.getElementById('reportOverlay').scrollTop = 0;
+    }
+
+    // =========================================================================
+    // ADMIN PORTAL LOGIN MODAL LOGIC (LOCKED POPUP)
+    // =========================================================================
+    const adminModal = document.getElementById('adminLoginModal');
+    const openAdminBtn = document.getElementById('openAdminModalBtn');
+    const closeAdminBtn = document.getElementById('closeAdminModalBtn');
+    const adminForm = document.getElementById('adminLoginForm');
+    const adminUsernameInput = document.getElementById('adminUsername');
+    const adminPasswordInput = document.getElementById('adminPassword');
+    const toggleShowAdminPwd = document.getElementById('toggleShowAdminPwd');
+    const adminErrMsg = document.getElementById('adminErrMsg');
+
+    function openAdminModal() {
+      // If already authenticated during this active browser session, open directly
+      if (sessionStorage.getItem('grandis_admin_logged_in') === 'true') {
+        window.location.href = 'qc-sheet.html';
+        return;
+      }
+      adminErrMsg.textContent = '';
+      adminErrMsg.style.display = 'none';
+      adminUsernameInput.value = '';
+      adminPasswordInput.value = '';
+      toggleShowAdminPwd.checked = false;
+      adminPasswordInput.type = 'password';
+      
+      // Make modal visible reliably across all browsers
+      adminModal.classList.add('active');
+      adminModal.style.display = 'flex';
+      setTimeout(() => adminUsernameInput.focus(), 80);
+    }
+
+    function closeAdminModal() {
+      adminModal.classList.remove('active');
+      adminModal.style.display = 'none';
+    }
+
+    // Open modal on click
+    if (openAdminBtn) {
+      openAdminBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        openAdminModal();
+      });
+    }
+
+    // Close modal on X button
+    if (closeAdminBtn) {
+      closeAdminBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        closeAdminModal();
+      });
+    }
+
+    // Close modal when clicking on dark backdrop
+    if (adminModal) {
+      adminModal.addEventListener('click', (e) => {
+        if (e.target === adminModal) {
+          closeAdminModal();
+        }
+      });
+    }
+
+    // "Show password" toggle checkbox option
+    if (toggleShowAdminPwd) {
+      toggleShowAdminPwd.addEventListener('change', (e) => {
+        adminPasswordInput.type = e.target.checked ? 'text' : 'password';
+      });
+    }
+
+    // Admin Authentication Check
+    if (adminForm) {
+      adminForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        adminErrMsg.textContent = '';
+        adminErrMsg.style.display = 'none';
+
+        const username = (adminUsernameInput.value || '').trim();
+        const password = (adminPasswordInput.value || '').trim();
+
+        // Required Credentials: Username: Admin1 | Password: QCheadR&D
+        const isUserMatch = (username === 'Admin1' || username.toLowerCase() === 'admin1' || username === 'Admin' || username.toLowerCase() === 'admin');
+        const isPassMatch = (password === 'QCheadR&D' || password === 'QcheadR&D');
+
+        if (isUserMatch && isPassMatch) {
+          // Store session in sessionStorage (auto-logout on browser close)
+          sessionStorage.setItem('grandis_admin_logged_in', 'true');
+
+          adminErrMsg.style.display = 'block';
+          adminErrMsg.style.color = '#15803d';
+          adminErrMsg.style.background = '#f0fdf4';
+          adminErrMsg.style.borderColor = '#bbf7d0';
+          adminErrMsg.textContent = 'Login successful! Opening Admin Panel...';
+
+          setTimeout(() => {
+            window.location.href = 'qc-sheet.html';
+          }, 150);
+        } else {
+          adminErrMsg.style.display = 'block';
+          adminErrMsg.style.color = '#dc2626';
+          adminErrMsg.style.background = '#fef2f2';
+          adminErrMsg.style.borderColor = '#fecaca';
+          adminErrMsg.textContent = 'Invalid username or password';
+          adminPasswordInput.value = '';
+          adminPasswordInput.focus();
+        }
+      });
+    }
+
+    // Auto-open modal if URL contains #admin
+    if (window.location.hash === '#admin') {
+      setTimeout(openAdminModal, 100);
+    }
+    window.addEventListener('hashchange', () => {
+      if (window.location.hash === '#admin') {
+        openAdminModal();
+      }
+    });
+  </script>
+</body>
+</html>
