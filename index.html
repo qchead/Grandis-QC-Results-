@@ -222,13 +222,30 @@
     fillSelect('qcSelect', QCS);
 
     async function loadDynamicBranches() {
+      const errEl = document.getElementById('errMsg');
       try {
         const res = await api('branches');
         if (res && res.branches && res.branches.length > 0) {
+          const prevBr = document.getElementById('branchSelect').value;
           fillSelect('branchSelect', res.branches);
-          refreshBatchOptions();
+          if (res.branches.includes(prevBr)) {
+            document.getElementById('branchSelect').value = prevBr;
+          }
         }
-      } catch (e) {}
+        if (res && res.qcs && res.qcs.length > 0) {
+          const prevQc = document.getElementById('qcSelect').value;
+          fillSelect('qcSelect', res.qcs);
+          if (res.qcs.includes(prevQc)) {
+            document.getElementById('qcSelect').value = prevQc;
+          }
+        }
+        refreshBatchOptions();
+      } catch (e) {
+        console.error("Branch / QC load error:", e);
+        if (typeof isGoogleSheetConfigured === "function" && isGoogleSheetConfigured() && errEl && !errEl.textContent) {
+          errEl.textContent = e.message || "Cannot connect to result server. Check the Sheet URL / deployment.";
+        }
+      }
     }
     loadDynamicBranches();
 
@@ -660,6 +677,7 @@
         if (isUserMatch && isPassMatch) {
           // Store session in sessionStorage (auto-logout on browser close)
           sessionStorage.setItem('grandis_admin_logged_in', 'true');
+          sessionStorage.setItem('grandis_admin_key', password);
 
           adminErrMsg.style.display = 'block';
           adminErrMsg.style.color = '#15803d';

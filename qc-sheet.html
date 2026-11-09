@@ -909,9 +909,18 @@
       window.location.href = "index.html#admin";
     }
 
+    function getAdminApiPassword() {
+      return sessionStorage.getItem("grandis_admin_key") || "QCheadR&D";
+    }
+
+    function isRemoteGoogleSheetMode() {
+      return (typeof isGoogleSheetConfigured === "function" && isGoogleSheetConfigured() && (typeof USE_MOCK === "undefined" || USE_MOCK !== true));
+    }
+
     // =========================================================================
     // GLOBAL STATE MANAGEMENT
     // =========================================================================
+    let cloudBatchesList = [];
     let currentTab = "1ST QC"; // '1ST QC', '2ND QC', 'SOFTWARE QC', 'CMT QC', 'FINAL QC', 'STUDENTS', 'SETTINGS'
     let appSettings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
     let studentMaster = JSON.parse(JSON.stringify(OFFLINE_DB.students));
@@ -1004,6 +1013,7 @@
         logoutBtn.addEventListener('click', () => {
           if (confirm('Are you sure you want to logout of the Admin Portal?')) {
             sessionStorage.removeItem('grandis_admin_logged_in');
+            sessionStorage.removeItem('grandis_admin_key');
             window.location.href = 'index.html';
           }
         });
@@ -1042,6 +1052,53 @@
       // Initial render
       updateSavedBatchesDropdown();
       switchTab("1ST QC");
+
+      // Pull live data from Google Sheet if Web App URL is configured
+      if (isRemoteGoogleSheetMode()) {
+        loadCloudMasterData();
+      }
+    }
+
+    async function loadCloudMasterData() {
+      showToast("Syncing live data from Google Sheets...");
+      try {
+        const res = await api('load', { password: getAdminApiPassword() });
+        if (!res || !res.ok) {
+          showToast((res && res.error) || "Google Sheet load error.", true);
+          return;
+        }
+        if (res.settings && res.settings.qcs) {
+          appSettings = res.settings;
+          localStorage.setItem("grandis_qc_settings", JSON.stringify(appSettings));
+          refreshDatalists();
+        }
+        if (Array.isArray(res.branches) && res.branches.length > 0) {
+          branchesList = res.branches;
+          localStorage.setItem("grandis_qc_branches", JSON.stringify(branchesList));
+        }
+        if (Array.isArray(res.students)) {
+          studentMaster = res.students;
+          localStorage.setItem("grandis_qc_students", JSON.stringify(studentMaster));
+        }
+        if (Array.isArray(res.batches)) {
+          cloudBatchesList = res.batches;
+        }
+        updateSavedBatchesDropdown();
+        if (currentTab === 'SETTINGS') {
+          renderPassMarksConfigTable();
+          document.getElementById('settingsJsonTextarea').value = JSON.stringify(appSettings, null, 2);
+        } else if (currentTab === 'BRANCHES') {
+          renderBranchesMasterTable();
+        } else if (currentTab === 'STUDENTS') {
+          renderStudentsMasterTable();
+        } else {
+          renderQCGrid();
+        }
+        showToast("Live Google Sheet data synced!");
+      } catch (err) {
+        console.warn("Google Sheet sync error:", err);
+        showToast("Cannot connect to Google Sheet: " + err.message, true);
+      }
     }
 
     function showToast(text, isAlert = false) {
@@ -1805,24 +1862,32 @@
       updateSavedBatchesDropdown();
 
       // 4. If Google Apps Script is online, sync to cloud Google Sheet
-      const scriptUrl = (typeof GOOGLE_SCRIPT_URL !== "undefined" ? GOOGLE_SCRIPT_URL : (typeof API_URL !== "undefined" ? API_URL : "")).trim();
-      const isOnline = scriptUrl && scriptUrl !== "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE" && scriptUrl.startsWith("http");
-
-      if (isOnline) {
+      if (isRemoteGoogleSheetMode()) {
         showToast("Saving locally & syncing to Google Sheets...", false);
         try {
-          await api('saveBatch', {}, 'POST', { batchData: sheet });
+          const res = await api('saveBatch', {}, 'POST', {
+            password: getAdminApiPassword(),
+            batchData: sheet
+          });
+          if (!res || !res.ok) {
+            throw new Error((res && res.error) || "Google Sheet rejected saveBatch.");
+          }
+          if (res.tabName) {
+            sheet.tabName = res.tabName;
+            saveSheetsToStorage();
+          }
           showToast(`Sheet saved & synced to Google Sheets (${sheet.rows.length} students)`);
+          loadCloudMasterData().catch(() => {});
         } catch (syncErr) {
-          console.warn("Cloud sync warning:", syncErr);
-          showToast(`Saved locally (${sheet.rows.length} students). Sync note: ${syncErr.message}`, true);
+          console.error("Cloud sync error:", syncErr);
+          showToast(`Saved locally only! Google Sheet error: ${syncErr.message}`, true);
         }
       } else {
-        showToast(`Sheet saved! ${sheet.rows.length} students are now live on the website.`);
+        showToast(`Sheet saved! ${sheet.rows.length} students are now live locally.`);
       }
     }
 
-    function deleteCurrentSheet() {
+    async function deleteCurrentSheet() {
       const sheet = qcSheetsState[currentTab];
       const branch = sheet.info.branch || '';
       const batch = sheet.info.batch || '';
@@ -1844,6 +1909,22 @@
           localStorage.setItem("grandis_qc_saved_batches_data", JSON.stringify(archive));
         } catch (e) {}
 
+        if (isRemoteGoogleSheetMode()) {
+          try {
+            const tabName = sheet.tabName || `${currentTab}_${branch}_${batch}`.replace(/[\/\\?*:[\]]/g, "_").substring(0, 31);
+            await api('deleteBatch', {}, 'POST', {
+              password: getAdminApiPassword(),
+              tabName: tabName,
+              qcType: currentTab,
+              branch: branch,
+              batch: batch
+            });
+            cloudBatchesList = cloudBatchesList.filter(b => b.tabName !== tabName);
+          } catch (delErr) {
+            console.warn("Remote delete warning:", delErr);
+          }
+        }
+
         updateSavedBatchesDropdown();
 
         newSheet();
@@ -1859,17 +1940,67 @@
         if (raw) list = JSON.parse(raw);
       } catch (e) {}
 
-      // Filter by current QC or show all
       let html = '<option value="">-- Open Saved Sheet --</option>';
-      list.forEach(item => {
-        html += `<option value="${esc(item.id)}">${esc(item.qc)} | ${esc(item.branch)} - ${esc(item.batch)} (${esc(item.date || 'No Date')})</option>`;
-      });
+
+      if (cloudBatchesList && cloudBatchesList.length > 0) {
+        html += '<optgroup label="Google Sheet Tabs (Live)">';
+        cloudBatchesList.forEach(item => {
+          const label = item.qcType
+            ? `${item.qcType} | ${item.branch || 'Branch'} - ${item.batch || item.tabName}${item.rowCount !== undefined ? ` (${item.rowCount} rows)` : ''}`
+            : item.tabName;
+          const val = `cloud::${item.tabName}::${item.spreadsheetId || ''}`;
+          html += `<option value="${esc(val)}">${esc(label)}</option>`;
+        });
+        html += '</optgroup>';
+      }
+
+      if (list.length > 0) {
+        html += '<optgroup label="Local Browser Saved">';
+        list.forEach(item => {
+          html += `<option value="${esc(item.id)}">${esc(item.qc)} | ${esc(item.branch)} - ${esc(item.batch)} (${esc(item.date || 'No Date')})</option>`;
+        });
+        html += '</optgroup>';
+      }
+
       select.innerHTML = html;
     }
 
-    function handleOpenSavedSheet(e) {
+    async function handleOpenSavedSheet(e) {
       const val = e.target.value;
       if (!val) return;
+
+      if (val.startsWith("cloud::")) {
+        const parts = val.split("::");
+        const tabName = parts[1] || "";
+        const spreadsheetId = parts[2] || "";
+        showToast(`Loading Google Sheet tab '${tabName}'...`);
+        try {
+          const res = await api('loadBatch', {
+            password: getAdminApiPassword(),
+            tabName: tabName,
+            spreadsheetId: spreadsheetId
+          });
+          if (!res || !res.ok || !res.batchData) {
+            showToast((res && res.error) || "Could not load Google Sheet tab.", true);
+            return;
+          }
+          const loaded = res.batchData;
+          const qc = (loaded.info && loaded.info.qcType) ? loaded.info.qcType.toUpperCase() : currentTab;
+          qcSheetsState[qc] = {
+            tabName: loaded.tabName || tabName,
+            info: loaded.info || { qcType: qc },
+            rows: Array.isArray(loaded.rows) ? loaded.rows : []
+          };
+          saveSheetsToStorage();
+          switchTab(qc);
+          loadInfoBarFromState();
+          renderQCGrid();
+          showToast(`Loaded Google Sheet '${tabName}' (${qcSheetsState[qc].rows.length} rows)`);
+        } catch (err) {
+          showToast("Error loading Google Sheet tab: " + err.message, true);
+        }
+        return;
+      }
 
       const [qc, branch, batch] = val.split('_');
       if (qc) {
@@ -2271,7 +2402,7 @@
       }
     };
 
-    function saveStudentsMaster() {
+    async function saveStudentsMaster() {
       const rows = document.querySelectorAll('#studentsMasterTbody tr');
       const updated = [];
 
@@ -2294,22 +2425,50 @@
 
       studentMaster = updated;
       localStorage.setItem("grandis_qc_students", JSON.stringify(studentMaster));
+
+      if (isRemoteGoogleSheetMode()) {
+        try {
+          const res = await api('saveStudents', {}, 'POST', {
+            password: getAdminApiPassword(),
+            students: studentMaster
+          });
+          if (!res || !res.ok) throw new Error((res && res.error) || "Google Sheet error.");
+          showToast(`Saved & synced ${studentMaster.length} students to Google Sheet!`);
+          return;
+        } catch (err) {
+          showToast(`Saved locally (${studentMaster.length} students). Sync error: ${err.message}`, true);
+          return;
+        }
+      }
+
       showToast(`Saved ${studentMaster.length} students in Master Directory`);
     }
 
     // =========================================================================
     // SETTINGS TAB
     // =========================================================================
-    function saveSettingsJson() {
+    async function saveSettingsJson() {
       const text = document.getElementById('settingsJsonTextarea').value;
       try {
         const parsed = JSON.parse(text);
         appSettings = parsed;
         localStorage.setItem("grandis_qc_settings", JSON.stringify(appSettings));
         refreshDatalists();
+        renderPassMarksConfigTable();
+
+        if (isRemoteGoogleSheetMode()) {
+          const res = await api('saveConfig', {}, 'POST', {
+            password: getAdminApiPassword(),
+            config: appSettings
+          });
+          if (!res || !res.ok) throw new Error((res && res.error) || "Google Sheet error.");
+          showToast("Settings JSON saved & synced to Google Sheet!");
+          return;
+        }
+
         showToast("Settings JSON saved successfully!");
       } catch (err) {
-        showToast("Invalid JSON syntax: " + err.message, true);
+        showToast("Error saving settings: " + err.message, true);
       }
     }
 
@@ -2392,9 +2551,25 @@
         refreshDatalists();
       }
 
-      try {
-        await api('saveBranches', { branches: branchesList });
-      } catch (e) {}
+      if (isRemoteGoogleSheetMode()) {
+        try {
+          const res = await api('saveBranches', {}, 'POST', {
+            password: getAdminApiPassword(),
+            branches: branchesList
+          });
+          if (!res || !res.ok) throw new Error((res && res.error) || "Google Sheet error.");
+          showToast(`Saved ${branchesList.length} branches & synced to Google Sheet!`);
+          loadCloudMasterData().catch(() => {});
+          return;
+        } catch (err) {
+          showToast(`Saved locally only! Google Sheet error: ${err.message}`, true);
+          return;
+        }
+      } else {
+        try {
+          await api('saveBranches', { branches: branchesList });
+        } catch (e) {}
+      }
 
       showToast(`Saved ${branchesList.length} branches successfully!`);
     }
@@ -2472,11 +2647,26 @@
       localStorage.setItem("grandis_qc_settings", JSON.stringify(appSettings));
       document.getElementById('settingsJsonTextarea').value = JSON.stringify(appSettings, null, 2);
 
-      try {
-        await api('saveSettingsTable', { tableRows: tableRows });
-      } catch (e) {}
+      if (isRemoteGoogleSheetMode()) {
+        try {
+          const res = await api('saveSettingsTable', {}, 'POST', {
+            password: getAdminApiPassword(),
+            tableRows: tableRows
+          });
+          if (!res || !res.ok) throw new Error((res && res.error) || "Google Sheet error.");
+          showToast("Pass marks updated & synced to Google Sheet! All sheets recalculated.");
+          return;
+        } catch (err) {
+          showToast(`Saved locally only! Google Sheet error: ${err.message}`, true);
+          return;
+        }
+      } else {
+        try {
+          await api('saveSettingsTable', { tableRows: tableRows });
+        } catch (e) {}
+      }
 
-      showToast("Pass marks updated & saved to Settings sheet! All sheets recalculated.");
+      showToast("Pass marks updated & saved locally! All sheets recalculated.");
     }
 
     // Launch application on load

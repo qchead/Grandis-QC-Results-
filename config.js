@@ -10,7 +10,7 @@
 // ============================================================================
 // Replace the placeholder URL below with your Google Apps Script Web App Executable URL:
 // Example: "https://script.google.com/macros/s/AKfycbwXXXXXXXXXXXXXXXXXXXXXXXX/exec"
-const GOOGLE_SCRIPT_URL = "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE";
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxPZw2lzFzwxltDx37RQc1_vEusxx1S7Dx7llOkv4KQYDNgLKPkSxFowVrY5xxLcZbtbQ/exec";
 
 // Set to true ONLY if you explicitly want to test locally with offline mock data.
 // Default is false: The website ALWAYS connects to your real Google Sheet!
@@ -708,21 +708,29 @@ const OFFLINE_DB = {
 };
 
 /**
+ * Returns true when GOOGLE_SCRIPT_URL has been set to a real deployed Apps Script URL.
+ */
+function isGoogleSheetConfigured() {
+  const scriptUrl = (typeof GOOGLE_SCRIPT_URL !== "undefined" ? GOOGLE_SCRIPT_URL : (typeof API_URL !== "undefined" ? API_URL : "")).trim();
+  return Boolean(scriptUrl && scriptUrl !== "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE" && scriptUrl.startsWith("http"));
+}
+
+/**
  * Universal API Helper
- * Connects to the real Google Apps Script Web App when configured and online,
- * or seamlessly handles operations locally via synchronized LocalStorage
- * so that any marks entered in qc-sheet.html immediately appear on index.html!
+ * Always connects to the real Google Apps Script Web App when GOOGLE_SCRIPT_URL is configured
+ * (unless USE_MOCK === true). Uses LocalStorage only before URL setup or in explicit mock mode.
  */
 async function api(action, params = {}, method = "GET", bodyData = null) {
   const scriptUrl = (typeof GOOGLE_SCRIPT_URL !== "undefined" ? GOOGLE_SCRIPT_URL : (typeof API_URL !== "undefined" ? API_URL : "")).trim();
-  const isOnlineConfigured = scriptUrl && scriptUrl !== "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE" && scriptUrl.startsWith("http");
+  const isOnlineConfigured = isGoogleSheetConfigured();
+  const isMock = (typeof USE_MOCK !== "undefined" && USE_MOCK === true);
 
-  // 1. If mock mode is explicitly true OR live Google Apps Script URL is not configured, use local engine
-  if (!isOnlineConfigured || (typeof USE_MOCK !== "undefined" && USE_MOCK === true)) {
+  // 1. Use local engine ONLY when explicitly in mock mode OR before GOOGLE_SCRIPT_URL is pasted
+  if (isMock || !isOnlineConfigured) {
     return handleOfflineApi(action, params, method, bodyData);
   }
 
-  // 2. Real Google Sheet Backend Connection
+  // 2. Real Google Sheet Backend Connection (No silent fallback to mock data!)
   let canonicalAction = action;
   if (action === "listBatches") canonicalAction = "batches";
   if (action === "studentGetResult") canonicalAction = "login";
@@ -740,7 +748,8 @@ async function api(action, params = {}, method = "GET", bodyData = null) {
 
   const options = {
     method: method,
-    headers: {}
+    headers: {},
+    cache: "no-store"
   };
 
   if (method === "POST" && bodyData) {
@@ -754,7 +763,7 @@ async function api(action, params = {}, method = "GET", bodyData = null) {
 
     // Check if the server returned HTML (authentication issue or Apps Script crash)
     if (text.trim().startsWith("<") || text.includes("<html") || text.includes("Google Drive – Access Denied")) {
-      const err = "Cannot connect to result server. The script returned an HTML page instead of JSON. Ensure 'Who has access' is set to 'Anyone' in your Google Apps Script deployment.";
+      const err = "Cannot connect to result server. Check the Sheet URL / deployment (ensure 'Execute as: Me' and 'Who has access: Anyone').";
       console.error("Apps Script HTML Response:", text);
       throw new Error(err);
     }
@@ -764,25 +773,16 @@ async function api(action, params = {}, method = "GET", bodyData = null) {
       parsed = JSON.parse(text);
     } catch (parseErr) {
       console.error("Non-JSON Server Response:", text);
-      throw new Error("Cannot connect to result server. Check the Sheet URL / deployment (received invalid response).");
+      throw new Error("Cannot connect to result server. Check the Sheet URL / deployment (invalid JSON response).");
     }
 
     return parsed;
   } catch (err) {
     console.error("API Error connecting to Google Sheet:", err);
-    // If remote connection fails, try fallback to local storage
-    try {
-      const localResult = await handleOfflineApi(action, params, method, bodyData);
-      if (localResult && (localResult.ok || (localResult.batches && localResult.batches.length > 0))) {
-        console.info("Using local storage fallback response.");
-        return localResult;
-      }
-    } catch (fallbackErr) {}
-
     if (err.message && err.message.startsWith("Cannot connect to result server")) {
       throw err;
     }
-    throw new Error("Cannot connect to result server. Check the Sheet URL / deployment. Ensure Web App is deployed as Anyone.");
+    throw new Error("Cannot connect to result server. Check the Sheet URL / deployment.");
   }
 }
 
@@ -886,6 +886,35 @@ async function handleOfflineApi(action, params, method, bodyData) {
 
   if (act === "saveSettingsTable") {
     return { ok: true, message: "Settings table saved offline." };
+  }
+
+  if (act === "saveStudents") {
+    try {
+      const st = params.students || (bodyData && bodyData.students);
+      if (st) localStorage.setItem("grandis_qc_students", JSON.stringify(st));
+    } catch (e) {}
+    return { ok: true, message: "Students saved offline." };
+  }
+
+  if (act === "saveConfig") {
+    try {
+      const cfg = params.config || (bodyData && bodyData.config);
+      if (cfg) localStorage.setItem("grandis_qc_settings", typeof cfg === "string" ? cfg : JSON.stringify(cfg));
+    } catch (e) {}
+    return { ok: true, message: "Settings saved offline." };
+  }
+
+  if (act === "deleteBatch") {
+    return { ok: true, message: "Batch deleted offline." };
+  }
+
+  if (act === "getSettings") {
+    let cur = DEFAULT_SETTINGS;
+    try {
+      const s = localStorage.getItem("grandis_qc_settings");
+      if (s) cur = JSON.parse(s);
+    } catch (e) {}
+    return { ok: true, settings: cur };
   }
 
   if (act === "login") {
