@@ -439,7 +439,7 @@
         const totalWords = evalResult.grandTotal !== '' ? numberToWords(parseFloat(evalResult.grandTotal)) : 'Marks Pending';
 
         // Format QC date to dd-mm-yyyy
-        const formattedQCDate = formatDateDDMMYYYY(info.qcDate || info.date || '');
+        const formattedQCDate = info.qcDate || info.date || '-';
 
         const commentText = student.remarks || (evalResult.overallResult === 'PASS' 
           ? 'Candidate has successfully demonstrated required proficiency standards.' 
