@@ -9,11 +9,11 @@
 <body>
 
   <!-- =========================================================================
-       VIEW 1: STUDENT QC PORTAL LOGIN (OLD MODEL FULL SCREEN SPLIT LAYOUT)
+       VIEW 1: STUDENT QC PORTAL LOGIN
        ========================================================================= -->
   <div class="portal-wrapper" id="portalLoginView">
     
-    <!-- Left Black Branding Panel (Edge to Edge) -->
+    <!-- Left Black Branding Panel -->
     <div class="portal-left">
       <div class="portal-left-logo">
         <img src="grandis-logo-cropped.png" alt="Grandis Technology Pvt. Ltd." class="portal-left-brand-img">
@@ -23,7 +23,6 @@
         <h1>QC Result<br>Portal</h1>
         <p>Official Quality Checking Examination and Evaluation Results published by the R&amp;D Department.</p>
         
-        <!-- Strip of 4 colour tiles: #8fc98a, #4dbfb3, #29abe2, #2a8fe0 -->
         <div class="color-tiles-strip">
           <div class="color-tile t1" title="#8fc98a"></div>
           <div class="color-tile t2" title="#4dbfb3"></div>
@@ -37,7 +36,7 @@
       </div>
     </div>
 
-    <!-- Right White Form Panel (Edge to Edge with Centered Login Form) -->
+    <!-- Right White Form Panel -->
     <div class="portal-right">
       <div class="portal-right-content">
         <div class="portal-header">
@@ -45,7 +44,6 @@
           <p>Select your branch, evaluation term and enter your GID credentials to access your verified mark sheet.</p>
         </div>
 
-        <!-- Quick Demo Credentials Box -->
         <div class="demo-credentials-box">
           <b>Demo Access Credentials:</b><br>
           • Pass Sample: GID <span class="pill">DEMO1002</span> | Password <span class="pill">DEMO1002</span> (Result: PASS, Grade A)<br>
@@ -145,13 +143,13 @@
       </div>
     </div>
 
-    <!-- Official Report Document Content (Injected dynamically) -->
+    <!-- Official Report Document Content -->
     <div id="reportBodyContainer"></div>
 
   </div>
 
   <!-- =========================================================================
-       ADMIN PORTAL LOGIN MODAL (AUTHENTICATION LOCK)
+       ADMIN PORTAL LOGIN MODAL
        ========================================================================= -->
   <div id="adminLoginModal" class="admin-modal-overlay">
     <div class="admin-modal-dialog">
@@ -164,7 +162,7 @@
             </svg>
           </div>
           <div>
-            <h3> Authentication</h3>
+            <h3>Authentication</h3>
             <p>Authorized Staff &amp; QC Heads only</p>
           </div>
         </div>
@@ -196,7 +194,6 @@
           </div>
         </div>
 
-        <!-- Show password option -->
         <div class="admin-show-pwd-row">
           <label class="show-pwd-checkbox-label">
             <input type="checkbox" id="toggleShowAdminPwd">
@@ -254,14 +251,12 @@
       el.innerHTML = items.map(it => `<option value="${esc(it)}">${esc(it)}</option>`).join('');
     }
 
-    // Refresh batch dropdown whenever branch or QC selection changes
     async function refreshBatchOptions() {
       const branch = document.getElementById('branchSelect').value;
       const qc = document.getElementById('qcSelect').value;
       const batchSel = document.getElementById('batchSelect');
       const errEl = document.getElementById('errMsg');
       
-      // Show loading indicator in dropdown
       batchSel.disabled = true;
       batchSel.innerHTML = '<option value="">Loading batches...</option>';
 
@@ -300,12 +295,10 @@
     });
     refreshBatchOptions();
 
-    // Close Report Overlay handler
     document.getElementById('closeReportBtn').addEventListener('click', () => {
       document.getElementById('reportOverlay').hidden = true;
     });
 
-    // Form Submission: Real-time query to Google Sheets
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const errEl = document.getElementById('errMsg');
@@ -336,7 +329,9 @@
         if (!res || !res.ok || res.error || !res.results || res.results.length === 0) {
           errEl.textContent = (res && res.error) ? res.error : `No verified result found for GID ${gid} in ${qc} (${branch}).`;
         } else {
-          renderStudentMarkSheets(res.q, res.results);
+          // Merge returned definitions with DEFAULT_SETTINGS to ensure max/ranges exist
+          const mergedQcDef = Object.assign({}, DEFAULT_SETTINGS.qcs[qc] || {}, res.q || {});
+          renderStudentMarkSheets(mergedQcDef, res.results);
         }
       } catch (err) {
         console.error("Student result query error:", err);
@@ -353,7 +348,6 @@
 
     /**
      * Render Official QC Mark Sheet
-     * Matches exact certificate design with double gold frame, ivory tables, and official layout
      */
     function renderStudentMarkSheets(qcDef, results) {
       const container = document.getElementById('reportBodyContainer');
@@ -363,16 +357,14 @@
         const student = item.row || {};
         const marks = student.m || student.marks || {};
         
-        // Calculate all values according to configurable rules
+        // Calculate all values
         const evalResult = evaluateQC(qcDef, marks);
 
-        // Derive Main & Sub Report Titles (e.g. "FIRST QC REPORT")
         const mainReportTitle = (qcDef.name && qcDef.name.toUpperCase().endsWith('REPORT')
           ? qcDef.name
           : `${qcDef.name || 'QC'} REPORT`).toUpperCase();
         const subReportTitle = qcDef.title || '';
 
-        // Generate Section rows with A., B., C. prefixes and per-section Sl. No starting at 1
         let sectionsHtml = '';
 
         qcDef.sections.forEach((sec, sIdx) => {
@@ -381,14 +373,12 @@
           const secLetter = String.fromCharCode(65 + sIdx);
           const secTitle = `${secLetter}. ${sec.name.toUpperCase()}`;
 
-          // Section Header Row (e.g. A. THEORY, B. PRACTICAL)
           sectionsHtml += `
             <tr class="section-row">
               <td colspan="6">${esc(secTitle)}</td>
             </tr>
           `;
 
-          // Part Rows with independent numbering per section (1, 2, 3...)
           let partSlNo = 1;
           sec.parts.forEach(part => {
             const rawVal = marks[part.name];
@@ -407,7 +397,6 @@
             `;
           });
 
-          // Section Total Row
           if (isSectionTotalApplicable || qcDef.sections.length > 1) {
             const statusClass = secSummary.status === 'PASS' ? 'status-badge-pass' : (secSummary.status === 'FAIL' ? 'status-badge-fail' : 'status-badge-pending');
             const passRequirementText = sec.passMark !== null ? sec.passMark : '-';
@@ -426,9 +415,8 @@
           }
         });
 
-        // Grand Total Row
         const grandStatusClass = evalResult.overallResult === 'PASS' ? 'status-badge-pass' : (evalResult.overallResult === 'FAIL' ? 'status-badge-fail' : 'status-badge-pending');
-        const passRuleDesc = qcDef.overall.rule === 'SECTIONS_PASS' ? 'Theory & Practical' : `Min ${qcDef.overall.passMark}`;
+        const passRuleDesc = (qcDef.overall && qcDef.overall.rule === 'SECTIONS_PASS') ? 'Theory & Practical' : `Min ${(qcDef.overall && qcDef.overall.passMark) || 0}`;
 
         const grandTotalRow = `
           <tr class="grand-row">
@@ -441,18 +429,18 @@
           </tr>
         `;
 
-        // Status badge in summary strip
         const summaryResultBadge = evalResult.overallResult 
           ? `<span class="${grandStatusClass}">${esc(evalResult.overallResult)}</span>`
           : `-`;
 
-        // Grade / Level label in summary strip (shown even for FAIL students when all parts completed)
-        const summaryGradeVal = evalResult.overallLabel || (evalResult.isPending ? 'PENDING' : '-');
+        // Grade / Level label in summary strip (checks calculated grade, then backend fetched grade)
+        const summaryGradeVal = evalResult.overallLabel || student.grade || (evalResult.isPending ? 'PENDING' : '-');
 
-        // Words for total marks
         const totalWords = evalResult.grandTotal !== '' ? numberToWords(parseFloat(evalResult.grandTotal)) : 'Marks Pending';
 
-        // Comments
+        // Format QC date to dd-mm-yyyy
+        const formattedQCDate = formatDateDDMMYYYY(info.qcDate || info.date || '');
+
         const commentText = student.remarks || (evalResult.overallResult === 'PASS' 
           ? 'Candidate has successfully demonstrated required proficiency standards.' 
           : (evalResult.overallResult === 'FAIL' ? 'Candidate did not achieve minimum passing criteria in one or more assessment modules.' : 'Evaluation in progress.'));
@@ -461,7 +449,6 @@
 
         return `
           <div class="official-report-sheet">
-            <!-- Header Row: Grandis Logo (Left), Institute Titles (Center), R&D Logo (Right) -->
             <div class="official-report-header">
               <div class="report-logo-left">
                 <img src="grandis-logo-transparent.png" alt="Grandis Technology Logo" class="cert-grandis-logo">
@@ -477,7 +464,6 @@
               </div>
             </div>
 
-            <!-- Title & Subtitle Block Below Header Row -->
             <div class="report-title-block">
               <div class="report-main-title">${esc(mainReportTitle)}</div>
               <div class="report-sub-title">${esc(subReportTitle)}</div>
@@ -489,7 +475,6 @@
               </div>
             </div>
 
-            <!-- Student & Batch Information Table (Exact 5 rows from official template) -->
             <table class="qc-info-table">
               <tr>
                 <th>STUDENT NAME</th>
@@ -517,11 +502,10 @@
               </tr>
               <tr>
                 <th>QC DATE</th>
-                <td colspan="3">${esc(info.qcDate || info.date || '-')}</td>
+                <td colspan="3">${esc(formattedQCDate)}</td>
               </tr>
             </table>
 
-            <!-- Marks Table (Exact Columns, Numbered Subjects, and PASS/FAIL Badges) -->
             <table class="qc-marks-table">
               <thead>
                 <tr>
@@ -539,7 +523,6 @@
               </tbody>
             </table>
 
-            <!-- Summary Strip -->
             <div class="qc-summary-strip">
               <div class="qc-summary-item">
                 <div class="qc-summary-label">Overall Result</div>
@@ -555,19 +538,16 @@
               </div>
             </div>
 
-            <!-- Grand Total In Words -->
             <div class="words-row">
               <b>Grand Total in Words:</b>
               <span class="words-val">${esc(totalWords)}</span>
             </div>
 
-            <!-- QC Comments Box -->
             <div class="qc-comments-box">
               <div class="comments-label">QC Inspector Comments &amp; Recommendations:</div>
               <div>${esc(commentText)}</div>
             </div>
 
-            <!-- Signature Lines -->
             <div class="qc-signatures">
               <div class="qc-sig-block">
                 <span>${esc(assessorNames)}</span>
@@ -579,7 +559,6 @@
               </div>
             </div>
 
-            <!-- Footer -->
             <div class="qc-report-footer">
               This document is an electronically verified quality checking evaluation record generated by the R&amp;D Department, GRANDIS TECHNOLOGY Pvt. Ltd.
             </div>
@@ -593,7 +572,7 @@
     }
 
     // =========================================================================
-    // ADMIN PORTAL LOGIN MODAL LOGIC (LOCKED POPUP)
+    // ADMIN PORTAL LOGIN MODAL LOGIC
     // =========================================================================
     const adminModal = document.getElementById('adminLoginModal');
     const openAdminBtn = document.getElementById('openAdminModalBtn');
@@ -605,7 +584,6 @@
     const adminErrMsg = document.getElementById('adminErrMsg');
 
     function openAdminModal() {
-      // If already authenticated during this active browser session, open directly
       if (sessionStorage.getItem('grandis_admin_logged_in') === 'true') {
         window.location.href = 'qc-sheet.html';
         return;
@@ -617,7 +595,6 @@
       toggleShowAdminPwd.checked = false;
       adminPasswordInput.type = 'password';
       
-      // Make modal visible reliably across all browsers
       adminModal.classList.add('active');
       adminModal.style.display = 'flex';
       setTimeout(() => adminUsernameInput.focus(), 80);
@@ -628,7 +605,6 @@
       adminModal.style.display = 'none';
     }
 
-    // Open modal on click
     if (openAdminBtn) {
       openAdminBtn.addEventListener('click', (e) => {
         e.preventDefault();
@@ -636,7 +612,6 @@
       });
     }
 
-    // Close modal on X button
     if (closeAdminBtn) {
       closeAdminBtn.addEventListener('click', (e) => {
         e.preventDefault();
@@ -644,7 +619,6 @@
       });
     }
 
-    // Close modal when clicking on dark backdrop
     if (adminModal) {
       adminModal.addEventListener('click', (e) => {
         if (e.target === adminModal) {
@@ -653,14 +627,12 @@
       });
     }
 
-    // "Show password" toggle checkbox option
     if (toggleShowAdminPwd) {
       toggleShowAdminPwd.addEventListener('change', (e) => {
         adminPasswordInput.type = e.target.checked ? 'text' : 'password';
       });
     }
 
-    // Admin Authentication Check
     if (adminForm) {
       adminForm.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -670,12 +642,10 @@
         const username = (adminUsernameInput.value || '').trim();
         const password = (adminPasswordInput.value || '').trim();
 
-        // Required Credentials: Username: Admin1 | Password: QCheadR&D
         const isUserMatch = (username === 'Admin1' || username.toLowerCase() === 'admin1' || username === 'Admin' || username.toLowerCase() === 'admin');
         const isPassMatch = (password === 'QCheadR&D' || password === 'QcheadR&D');
 
         if (isUserMatch && isPassMatch) {
-          // Store session in sessionStorage (auto-logout on browser close)
           sessionStorage.setItem('grandis_admin_logged_in', 'true');
           sessionStorage.setItem('grandis_admin_key', password);
 
@@ -700,7 +670,6 @@
       });
     }
 
-    // Auto-open modal if URL contains #admin
     if (window.location.hash === '#admin') {
       setTimeout(openAdminModal, 100);
     }

@@ -8,12 +8,9 @@
 // ============================================================================
 // 1. BACKEND GOOGLE APPS SCRIPT WEB APP URL (PASTE YOUR DEPLOYED URL HERE)
 // ============================================================================
-// Replace the placeholder URL below with your Google Apps Script Web App Executable URL:
-// Example: "https://script.google.com/macros/s/AKfycbwXXXXXXXXXXXXXXXXXXXXXXXX/exec"
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxPZw2lzFzwxltDx37RQc1_vEusxx1S7Dx7llOkv4KQYDNgLKPkSxFowVrY5xxLcZbtbQ/exec";
 
 // Set to true ONLY if you explicitly want to test locally with offline mock data.
-// Default is false: The website ALWAYS connects to your real Google Sheet!
 const USE_MOCK = false;
 
 // Alias for backwards compatibility
@@ -55,7 +52,7 @@ const DEFAULT_SETTINGS = {
       sections: [
         {
           name: "Theory",
-          passMark: 20, // 1ST QC theory pass mark updated to 20 by default
+          passMark: 20,
           parts: [
             { name: "Identification", max: 8 },
             { name: "Checking", max: 8 },
@@ -258,6 +255,21 @@ function esc(str) {
   });
 }
 
+// Convert any Date/ISO string to strict dd-mm-yyyy format without time
+function formatDateDDMMYYYY(val) {
+  if (!val) return '-';
+  const str = String(val).trim();
+  const datePart = str.includes('T') ? str.split('T')[0] : str.split(' ')[0];
+  const parts = datePart.split(/[-/.]/);
+  if (parts.length === 3) {
+    if (parts[0].length === 4) {
+      return `${parts[2].padStart(2, '0')}-${parts[1].padStart(2, '0')}-${parts[0]}`;
+    }
+    return `${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}-${parts[2]}`;
+  }
+  return datePart;
+}
+
 // Convert numbers into standard English words for official marks sheet
 function numberToWords(num) {
   if (num === null || num === undefined || isNaN(num)) return "-";
@@ -290,11 +302,8 @@ function numberToWords(num) {
  * Universal QC Computation Engine
  * Implements all QC rules:
  * - Each mark 0..8
- * - No marks -> blank total, result, grade
- * - Partial marks -> running total, result: PENDING, blank grade
- * - All marks -> PASS/FAIL & Grade/Level
- * - Overall pass requires Theory pass AND Practical pass (for section-rule QCs)
- * - Grade/Level shown even for FAIL students
+ * - Dynamic fallback for max marks calculation
+ * - Dynamic fallback for grade calculation
  */
 function evaluateQC(qcDef, marksObj) {
   let totalEntered = 0;
@@ -306,7 +315,7 @@ function evaluateQC(qcDef, marksObj) {
   qcDef.sections.forEach(sec => {
     let secEntered = 0;
     let secTotal = 0;
-    let secMax = sec.parts.reduce((acc, p) => acc + p.max, 0);
+    let secMax = sec.parts.reduce((acc, p) => acc + (p.max || 8), 0);
 
     sec.parts.forEach(part => {
       totalParts++;
@@ -348,7 +357,15 @@ function evaluateQC(qcDef, marksObj) {
     grandTotal += secTotal;
   });
 
-  const overallMax = qcDef.overall.max;
+  // Calculate safe fallback for max marks by summing parts if qcDef.overall.max is undefined
+  let calculatedMax = 0;
+  qcDef.sections.forEach(sec => {
+    sec.parts.forEach(p => {
+      calculatedMax += (p.max || 8);
+    });
+  });
+
+  const overallMax = (qcDef.overall && qcDef.overall.max) ? qcDef.overall.max : calculatedMax;
   let overallResult = "";
   let overallLabel = "";
   let isPending = false;
@@ -363,20 +380,27 @@ function evaluateQC(qcDef, marksObj) {
     isPending = true;
   } else {
     isComplete = true;
-    if (qcDef.overall.rule === "SECTIONS_PASS") {
+    if (qcDef.overall && qcDef.overall.rule === "SECTIONS_PASS") {
       overallResult = allSectionsPassed ? "PASS" : "FAIL";
     } else {
-      const minPass = qcDef.overall.passMark || 0;
+      const minPass = (qcDef.overall && qcDef.overall.passMark) || 0;
       overallResult = (grandTotal >= minPass) ? "PASS" : "FAIL";
     }
 
-    // Determine Grade / Level / Category (shown even for FAIL students)
-    if (qcDef.overall.ranges && qcDef.overall.ranges.length) {
-      for (const r of qcDef.overall.ranges) {
-        if (grandTotal >= r.min) {
-          overallLabel = r.label;
-          break;
-        }
+    // Determine Grade / Level / Category using qcDef ranges or safe standard thresholds
+    const defaultRanges = [
+      { min: Math.round(overallMax * 0.85), label: "A" },
+      { min: Math.round(overallMax * 0.70), label: "B" },
+      { min: 0, label: "C" }
+    ];
+    const activeRanges = (qcDef.overall && qcDef.overall.ranges && qcDef.overall.ranges.length)
+      ? qcDef.overall.ranges
+      : defaultRanges;
+
+    for (const r of activeRanges) {
+      if (grandTotal >= r.min) {
+        overallLabel = r.label;
+        break;
       }
     }
   }
@@ -393,7 +417,7 @@ function evaluateQC(qcDef, marksObj) {
     percentage,
     overallResult,
     overallLabel,
-    labelType: qcDef.overall.labelType || "Grade",
+    labelType: (qcDef.overall && qcDef.overall.labelType) || "Grade",
     isPending,
     isComplete,
     sections: sectionsSummary
@@ -401,7 +425,7 @@ function evaluateQC(qcDef, marksObj) {
 }
 
 // -------------------------------------------------------------
-// OFFLINE MOCK DATABASE (Used when API_URL is empty)
+// OFFLINE MOCK DATABASE
 // -------------------------------------------------------------
 const OFFLINE_DB = {
   batches: [
@@ -440,266 +464,38 @@ const OFFLINE_DB = {
           {
             gid: "DEMO1001",
             name: "Anjali S",
-            marks: {
-              "Identification": 5.5,
-              "Checking": 5,
-              "Multimeter": 6,
-              "Logic": 4.5,
-              "JUM/COM": 6,
-              "Connector": 6,
-              "IC": 6
-            },
+            marks: { "Identification": 5.5, "Checking": 5, "Multimeter": 6, "Logic": 4.5, "JUM/COM": 6, "Connector": 6, "IC": 6 },
             remarks: "Theory re-evaluation recommended"
           },
           {
             gid: "DEMO1002",
             name: "Rahul M",
-            marks: {
-              "Identification": 7.5,
-              "Checking": 7,
-              "Multimeter": 8,
-              "Logic": 7.5,
-              "JUM/COM": 7,
-              "Connector": 6.5,
-              "IC": 7.5
-            },
+            marks: { "Identification": 7.5, "Checking": 7, "Multimeter": 8, "Logic": 7.5, "JUM/COM": 7, "Connector": 6.5, "IC": 7.5 },
             remarks: "Excellent grasp of circuitry"
           },
           {
             gid: "DEMO1003",
             name: "Gokul Krishnan",
-            marks: {
-              "Identification": 8,
-              "Checking": 7.5,
-              "Multimeter": 8,
-              "Logic": 8,
-              "JUM/COM": 7.5,
-              "Connector": 8,
-              "IC": 7.5
-            },
+            marks: { "Identification": 8, "Checking": 7.5, "Multimeter": 8, "Logic": 8, "JUM/COM": 7.5, "Connector": 8, "IC": 7.5 },
             remarks: "Outstanding overall performance"
           },
           {
             gid: "DEMO1004",
             name: "Deepa Menon",
-            marks: {
-              "Identification": 6.5,
-              "Checking": 6,
-              "Multimeter": 6.5,
-              "Logic": 6,
-              "JUM/COM": 5.5,
-              "Connector": 6,
-              "IC": 6.5
-            },
+            marks: { "Identification": 6.5, "Checking": 6, "Multimeter": 6.5, "Logic": 6, "JUM/COM": 5.5, "Connector": 6, "IC": 6.5 },
             remarks: "Good effort"
           },
           {
             gid: "DEMO1005",
             name: "Fathima Noor",
-            marks: {
-              "Identification": 7,
-              "Checking": 7,
-              "Multimeter": 6.5,
-              "Logic": 7,
-              "JUM/COM": 7,
-              "Connector": 6,
-              "IC": 7
-            },
+            marks: { "Identification": 7, "Checking": 7, "Multimeter": 6.5, "Logic": 7, "JUM/COM": 7, "Connector": 6, "IC": 7 },
             remarks: "Very neat micro-soldering"
           },
           {
             gid: "DEMO1006",
             name: "Arjun Ramesh",
-            marks: {
-              "Identification": 4,
-              "Checking": 5,
-              "Multimeter": "",
-              "Logic": "",
-              "JUM/COM": "",
-              "Connector": "",
-              "IC": ""
-            },
+            marks: { "Identification": 4, "Checking": 5, "Multimeter": "", "Logic": "", "JUM/COM": "", "Connector": "", "IC": "" },
             remarks: "Evaluation in progress"
-          }
-        ]
-      }
-    },
-    "2ND QC": {
-      "Thodupuzha_Batch 24": {
-        info: {
-          qcType: "2ND QC",
-          qcDate: "2026-10-18",
-          faculty: "Mr. Anand Kumar",
-          incharge: "Mr. Vignesh R",
-          hof: "Dr. K. R. Sharma",
-          branch: "Thodupuzha",
-          batch: "Batch 24",
-          assessors: "Senior QC Inspector",
-          strength: 6
-        },
-        rows: [
-          {
-            gid: "DEMO1001",
-            name: "Anjali S",
-            marks: {
-              "Identification": 7,
-              "Checking": 6.5,
-              "Multimeter": 7,
-              "IC & Sections": 6,
-              "Logic": 6.5,
-              "Jumb&Combo": 6,
-              "Connector": 6.5,
-              "IC": 6
-            },
-            remarks: "Solid improvement"
-          },
-          {
-            gid: "DEMO1002",
-            name: "Rahul M",
-            marks: {
-              "Identification": 8,
-              "Checking": 7.5,
-              "Multimeter": 8,
-              "IC & Sections": 7.5,
-              "Logic": 7,
-              "Jumb&Combo": 7,
-              "Connector": 7,
-              "IC": 7.5
-            },
-            remarks: "Strong practical acumen"
-          }
-        ]
-      }
-    },
-    "SOFTWARE QC": {
-      "Thodupuzha_Batch 24": {
-        info: {
-          qcType: "SOFTWARE QC",
-          qcDate: "2026-10-20",
-          faculty: "Mr. Rajesh S",
-          incharge: "Mr. Suresh K",
-          hof: "Dr. K. R. Sharma",
-          branch: "Thodupuzha",
-          batch: "Batch 24",
-          assessors: "Software QC Lead",
-          strength: 6
-        },
-        rows: [
-          {
-            sn: 1,
-            gid: "DEMO1001",
-            name: "Anjali S",
-            marks: {
-              "Unlocking / FRP": 7,
-              "Flashing": 7.5,
-              "Reprogramming": 6.5,
-              "Theory": 7
-            },
-            remarks: "Accurate partition flashing"
-          },
-          {
-            sn: 2,
-            gid: "DEMO1002",
-            name: "Rahul M",
-            marks: {
-              "Unlocking / FRP": 8,
-              "Flashing": 8,
-              "Reprogramming": 7.5,
-              "Theory": 7.5
-            },
-            remarks: "Fast and precise recovery"
-          }
-        ]
-      }
-    },
-    "CMT QC": {
-      "Thodupuzha_Batch 24": {
-        info: {
-          qcType: "CMT QC",
-          qcDate: "2026-10-21",
-          faculty: "Mr. Senthil Nathan",
-          incharge: "Mr. Arun P",
-          hof: "Dr. K. R. Sharma",
-          branch: "Thodupuzha",
-          batch: "Batch 24",
-          assessors: "CMT Assessor Panel",
-          strength: 6
-        },
-        rows: [
-          {
-            gid: "DEMO1001",
-            name: "Anjali S",
-            marks: {
-              "1st QC": 7,
-              "2nd Module": 7.5,
-              "3rd Module": 6.5,
-              "4th Module": 7,
-              "Practical": 7
-            },
-            remarks: "Consistent benchmark"
-          },
-          {
-            gid: "DEMO1002",
-            name: "Rahul M",
-            marks: {
-              "1st QC": 8,
-              "2nd Module": 8,
-              "3rd Module": 7.5,
-              "4th Module": 8,
-              "Practical": 7.5
-            },
-            remarks: "Level 3 certified"
-          }
-        ]
-      }
-    },
-    "FINAL QC": {
-      "Thodupuzha_Batch 24": {
-        info: {
-          qcType: "FINAL QC",
-          qcDate: "2026-10-22",
-          faculty: "Mr. Anand Kumar",
-          incharge: "Mr. Vignesh R",
-          hof: "Dr. K. R. Sharma",
-          branch: "Thodupuzha",
-          batch: "Batch 24",
-          assessors: "Senior QC Board & Head of R&D",
-          strength: 6
-        },
-        rows: [
-          {
-            gid: "DEMO1001",
-            name: "Anjali S",
-            marks: {
-              "Identification": 7,
-              "Checking": 7,
-              "Multimeter": 7,
-              "DC & AMP": 6.5,
-              "Troubleshooting": 7,
-              "Software": 7.5,
-              "Component / Jumper": 7,
-              "Connector": 7,
-              "IC": 6.5,
-              "OCA": 7
-            },
-            remarks: "Recommended for Master Technician Certification"
-          },
-          {
-            gid: "DEMO1002",
-            name: "Rahul M",
-            marks: {
-              "Identification": 8,
-              "Checking": 8,
-              "Multimeter": 8,
-              "DC & AMP": 7.5,
-              "Troubleshooting": 8,
-              "Software": 8,
-              "Component / Jumper": 7.5,
-              "Connector": 8,
-              "IC": 7.5,
-              "OCA": 8
-            },
-            remarks: "Exceptional mastery across all hardware & firmware protocols"
           }
         ]
       }
@@ -717,28 +513,23 @@ function isGoogleSheetConfigured() {
 
 /**
  * Universal API Helper
- * Always connects to the real Google Apps Script Web App when GOOGLE_SCRIPT_URL is configured
- * (unless USE_MOCK === true). Uses LocalStorage only before URL setup or in explicit mock mode.
  */
 async function api(action, params = {}, method = "GET", bodyData = null) {
   const scriptUrl = (typeof GOOGLE_SCRIPT_URL !== "undefined" ? GOOGLE_SCRIPT_URL : (typeof API_URL !== "undefined" ? API_URL : "")).trim();
   const isOnlineConfigured = isGoogleSheetConfigured();
   const isMock = (typeof USE_MOCK !== "undefined" && USE_MOCK === true);
 
-  // 1. Use local engine ONLY when explicitly in mock mode OR before GOOGLE_SCRIPT_URL is pasted
   if (isMock || !isOnlineConfigured) {
     return handleOfflineApi(action, params, method, bodyData);
   }
 
-  // 2. Real Google Sheet Backend Connection (No silent fallback to mock data!)
   let canonicalAction = action;
   if (action === "listBatches") canonicalAction = "batches";
   if (action === "studentGetResult") canonicalAction = "login";
 
-  // Build remote URL with real-time cache buster (_t)
   const url = new URL(scriptUrl);
   url.searchParams.set("action", canonicalAction);
-  url.searchParams.set("_t", Date.now()); // Prevents stale browser caching; always reads live sheet!
+  url.searchParams.set("_t", Date.now());
 
   Object.keys(params).forEach(k => {
     if (params[k] !== undefined && params[k] !== null && k !== "_t") {
@@ -753,7 +544,7 @@ async function api(action, params = {}, method = "GET", bodyData = null) {
   };
 
   if (method === "POST" && bodyData) {
-    options.headers["Content-Type"] = "text/plain;charset=utf-8"; // Avoid CORS preflight OPTIONS issues with Apps Script
+    options.headers["Content-Type"] = "text/plain;charset=utf-8";
     options.body = typeof bodyData === "string" ? bodyData : JSON.stringify(bodyData);
   }
 
@@ -761,7 +552,6 @@ async function api(action, params = {}, method = "GET", bodyData = null) {
     const res = await fetch(url.toString(), options);
     const text = await res.text();
 
-    // Check if the server returned HTML (authentication issue or Apps Script crash)
     if (text.trim().startsWith("<") || text.includes("<html") || text.includes("Google Drive – Access Denied")) {
       const err = "Cannot connect to result server. Check the Sheet URL / deployment (ensure 'Execute as: Me' and 'Who has access: Anyone').";
       console.error("Apps Script HTML Response:", text);
@@ -787,16 +577,13 @@ async function api(action, params = {}, method = "GET", bodyData = null) {
 }
 
 /**
- * Offline & Local Storage Engine:
- * Connects qc-sheet.html and index.html seamlessly.
- * Reads saved batches and active sheets from localStorage, as well as demo OFFLINE_DB records.
+ * Offline & Local Storage Engine
  */
 async function handleOfflineApi(action, params, method, bodyData) {
   let act = action;
   if (act === "listBatches") act = "batches";
   if (act === "studentGetResult") act = "login";
 
-  // Simulate slight response delay for realistic UI feedback
   await new Promise(r => setTimeout(r, 80));
 
   if (act === "batches") {
@@ -807,36 +594,6 @@ async function handleOfflineApi(action, params, method, bodyData) {
     try {
       const saved = localStorage.getItem("grandis_qc_saved_batches");
       if (saved) customBatches = JSON.parse(saved);
-    } catch (e) {}
-
-    // Also collect from grandis_qc_saved_batches_data
-    try {
-      const bData = JSON.parse(localStorage.getItem("grandis_qc_saved_batches_data") || "{}");
-      Object.keys(bData).forEach(k => {
-        const item = bData[k];
-        if (item && item.info && item.info.batch) {
-          customBatches.push({
-            branch: item.info.branch || "",
-            qc: item.info.qcType || "",
-            batch: item.info.batch
-          });
-        }
-      });
-    } catch (e) {}
-
-    // Also collect from grandis_qc_sheets
-    try {
-      const sData = JSON.parse(localStorage.getItem("grandis_qc_sheets") || "{}");
-      Object.keys(sData).forEach(k => {
-        const item = sData[k];
-        if (item && item.info && item.info.batch) {
-          customBatches.push({
-            branch: item.info.branch || "",
-            qc: item.info.qcType || k,
-            batch: item.info.batch
-          });
-        }
-      });
     } catch (e) {}
 
     const allBatches = [...OFFLINE_DB.batches, ...customBatches];
@@ -860,63 +617,6 @@ async function handleOfflineApi(action, params, method, bodyData) {
     return { ok: true, branches: active.length > 0 ? active : ["Thodupuzha", "Chennai", "Ernakulam", "Calicut"] };
   }
 
-  if (act === "saveBranches") {
-    try {
-      const b = params.branches || (bodyData && bodyData.branches);
-      if (b) localStorage.setItem("grandis_qc_branches", JSON.stringify(b));
-    } catch (e) {}
-    return { ok: true, message: "Branches saved offline." };
-  }
-
-  if (act === "saveBatch") {
-    try {
-      const bData = params.batchData || (bodyData && bodyData.batchData) || bodyData;
-      if (bData && bData.info) {
-        const qc = (bData.info.qcType || "1ST QC").toUpperCase();
-        const branch = (bData.info.branch || "General").trim();
-        const batch = (bData.info.batch || "Batch").trim();
-        const key = `${qc}_${branch}_${batch}`;
-        const archive = JSON.parse(localStorage.getItem("grandis_qc_saved_batches_data") || "{}");
-        archive[key] = bData;
-        localStorage.setItem("grandis_qc_saved_batches_data", JSON.stringify(archive));
-      }
-    } catch (e) {}
-    return { ok: true, message: "Batch saved successfully in local storage." };
-  }
-
-  if (act === "saveSettingsTable") {
-    return { ok: true, message: "Settings table saved offline." };
-  }
-
-  if (act === "saveStudents") {
-    try {
-      const st = params.students || (bodyData && bodyData.students);
-      if (st) localStorage.setItem("grandis_qc_students", JSON.stringify(st));
-    } catch (e) {}
-    return { ok: true, message: "Students saved offline." };
-  }
-
-  if (act === "saveConfig") {
-    try {
-      const cfg = params.config || (bodyData && bodyData.config);
-      if (cfg) localStorage.setItem("grandis_qc_settings", typeof cfg === "string" ? cfg : JSON.stringify(cfg));
-    } catch (e) {}
-    return { ok: true, message: "Settings saved offline." };
-  }
-
-  if (act === "deleteBatch") {
-    return { ok: true, message: "Batch deleted offline." };
-  }
-
-  if (act === "getSettings") {
-    let cur = DEFAULT_SETTINGS;
-    try {
-      const s = localStorage.getItem("grandis_qc_settings");
-      if (s) cur = JSON.parse(s);
-    } catch (e) {}
-    return { ok: true, settings: cur };
-  }
-
   if (act === "login") {
     const branch = (params.branch || "").trim();
     const qc = (params.qc || "").trim().toUpperCase();
@@ -924,12 +624,8 @@ async function handleOfflineApi(action, params, method, bodyData) {
     const gid = (params.gid || "").trim().toUpperCase();
     const password = (params.password || "").trim();
 
-    if (!gid) {
-      return { ok: false, error: "Please enter your GID Number." };
-    }
-    if (!password) {
-      return { ok: false, error: "Please enter your Password." };
-    }
+    if (!gid) return { ok: false, error: "Please enter your GID Number." };
+    if (!password) return { ok: false, error: "Please enter your Password." };
     if (password.toUpperCase() !== gid) {
       return { ok: false, error: "Invalid password. Your password is your GID number." };
     }
@@ -945,7 +641,6 @@ async function handleOfflineApi(action, params, method, bodyData) {
 
     function checkAndAddStudent(sheetInfo, rows) {
       if (!sheetInfo || !rows || !Array.isArray(rows)) return;
-      
       const sQc = (sheetInfo.qcType || "").trim().toUpperCase();
       const sBranch = (sheetInfo.branch || "").trim().toLowerCase();
       const sBatch = (sheetInfo.batch || "").trim().toLowerCase();
@@ -957,46 +652,21 @@ async function handleOfflineApi(action, params, method, bodyData) {
       if (matchQc && matchBranch && matchBatch) {
         const studentRow = rows.find(r => (r.gid || "").trim().toUpperCase() === gid);
         if (studentRow) {
-          const exists = foundResults.some(f => 
-            f.row.gid.toUpperCase() === gid && 
-            (f.info.batch || '').toLowerCase() === (sheetInfo.batch || '').toLowerCase() &&
-            (f.info.qcType || '').toUpperCase() === sQc
-          );
-          if (!exists) {
-            foundResults.push({
-              info: sheetInfo,
-              row: {
-                gid: studentRow.gid,
-                name: studentRow.name,
-                m: studentRow.marks || studentRow.m || {},
-                remarks: studentRow.remarks || ""
-              }
-            });
-          }
+          foundResults.push({
+            info: sheetInfo,
+            row: {
+              gid: studentRow.gid,
+              name: studentRow.name,
+              m: studentRow.marks || studentRow.m || {},
+              grade: studentRow.grade || "",
+              remarks: studentRow.remarks || ""
+            }
+          });
         }
       }
     }
 
-    // 1. Search in saved batches archive (grandis_qc_saved_batches_data)
-    try {
-      const bData = JSON.parse(localStorage.getItem("grandis_qc_saved_batches_data") || "{}");
-      Object.keys(bData).forEach(k => {
-        const item = bData[k];
-        if (item) checkAndAddStudent(item.info, item.rows);
-      });
-    } catch (e) {}
-
-    // 2. Search in current working sheets (grandis_qc_sheets)
-    try {
-      const localSheets = JSON.parse(localStorage.getItem("grandis_qc_sheets") || "{}");
-      Object.keys(localSheets).forEach(k => {
-        const item = localSheets[k];
-        if (item) checkAndAddStudent(item.info, item.rows);
-      });
-    } catch (e) {}
-
-    // 3. Search in OFFLINE_DB
-    if (foundResults.length === 0 && OFFLINE_DB.records[qc]) {
+    if (OFFLINE_DB.records[qc]) {
       const qcBatches = OFFLINE_DB.records[qc];
       Object.keys(qcBatches).forEach(batchKey => {
         const bData = qcBatches[batchKey];

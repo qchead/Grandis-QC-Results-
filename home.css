@@ -1408,3 +1408,79 @@ body {
 .btn-admin-login-submit:active {
   transform: translateY(0);
 }
+
+@page {
+  size: A4 portrait;
+  margin: 5mm 6mm;
+}
+
+@media print {
+  html, body {
+    height: 100% !important;
+    overflow: hidden !important;
+    background: #ffffff !important;
+  }
+
+  .portal-wrapper,
+  .report-topbar,
+  .admin-modal-overlay {
+    display: none !important;
+  }
+
+  .report-overlay {
+    position: static !important;
+    padding: 0 !important;
+    background: transparent !important;
+    overflow: visible !important;
+  }
+
+  .official-report-sheet {
+    margin: 0 auto !important;
+    padding: 10px 14px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    page-break-inside: avoid !important;
+    page-break-after: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .qc-info-table th, .qc-info-table td,
+  .qc-marks-table th, .qc-marks-table td {
+    padding: 2.5px 5px !important;
+    font-size: 10px !important;
+  }
+
+  .official-report-header {
+    margin-bottom: 4px !important;
+  }
+
+  .report-title-block {
+    margin-bottom: 4px !important;
+  }
+
+  .qc-summary-strip {
+    margin: 6px 0 !important;
+    padding: 4px 10px !important;
+  }
+
+  .words-row {
+    margin-top: 4px !important;
+    font-size: 10.5px !important;
+  }
+
+  .qc-comments-box {
+    margin-top: 5px !important;
+    padding: 4px 8px !important;
+    font-size: 9.5px !important;
+  }
+
+  .qc-signatures {
+    margin-top: 12px !important;
+  }
+
+  .qc-report-footer {
+    margin-top: 6px !important;
+    font-size: 8px !important;
+  }
+}
