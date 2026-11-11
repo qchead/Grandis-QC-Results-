@@ -8,7 +8,7 @@
 // ============================================================================
 // 1. BACKEND GOOGLE APPS SCRIPT WEB APP URL (PASTE YOUR DEPLOYED URL HERE)
 // ============================================================================
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxPZw2lzFzwxltDx37RQc1_vEusxx1S7Dx7llOkv4KQYDNgLKPkSxFowVrY5xxLcZbtbQ/exec";
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzwRdhfAKgsaxt5MJ3pgmw_rLXuUujrzcZPvanehMDrU-OIfpBB7mfg4IIRm1z2pQb5tQ/exec";
 
 // Set to true ONLY if you explicitly want to test locally with offline mock data.
 const USE_MOCK = false;
