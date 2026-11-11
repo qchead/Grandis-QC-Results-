@@ -256,18 +256,34 @@ function esc(str) {
 }
 
 // Convert any Date/ISO string to strict dd-mm-yyyy format without time
+// Convert any Date, ISO string, or string like "Wed Nov 11 2026" to strict dd-mm-yyyy
 function formatDateDDMMYYYY(val) {
   if (!val) return '-';
-  const str = String(val).trim();
-  const datePart = str.includes('T') ? str.split('T')[0] : str.split(' ')[0];
-  const parts = datePart.split(/[-/.]/);
+
+  // 1. If it's a Date object or valid parseable text date
+  const parsed = (val instanceof Date) ? val : new Date(val);
+  if (!isNaN(parsed.getTime()) && typeof val !== 'number') {
+    const day = String(parsed.getDate()).padStart(2, '0');
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+    const year = parsed.getFullYear();
+    if (year > 1970) {
+      return `${day}-${month}-${year}`;
+    }
+  }
+
+  // 2. Fallback for strings
+  let str = String(val).trim();
+  if (str.includes('T')) str = str.split('T')[0];
+  
+  const parts = str.split(/[-/.]/);
   if (parts.length === 3) {
     if (parts[0].length === 4) {
       return `${parts[2].padStart(2, '0')}-${parts[1].padStart(2, '0')}-${parts[0]}`;
     }
     return `${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}-${parts[2]}`;
   }
-  return datePart;
+
+  return str;
 }
 
 // Convert numbers into standard English words for official marks sheet
